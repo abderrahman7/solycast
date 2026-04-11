@@ -646,9 +646,9 @@ with t1:
         ("🔋", "Capacity",   f"{capacity:.1f} kWp",        "#F59E0B"),
         ("📐", "Tilt",        f"{tilt}°",                    "#F59E0B"),
         ("🧭", "Facing",      az_label,                      "#F59E0B"),
-        ("📅", "Week Total",  f"{week_gen:.1f} kWh",         "#60A5FA"),
         ("🏆", "Best Day",    f"{best_day_str}  ·  {best_day_v:.1f} kWh",  "#34D399"),
         ("⚡", "Peak Power",  f"{peak_day_str}  ·  {peak_kw:.2f} kW",      "#FBBF24"),
+        ("📅", "Week Total",  f"{week_gen:.1f} kWh",         "#60A5FA"),
         ("📊", "Week Eff.",   f"{week_eff:.0f}%",            "#94A3B8"),
     ]), unsafe_allow_html=True)
 
@@ -681,10 +681,10 @@ with t1:
 # ── Tab 2: Weather Trends ──
 with t2:
     st.markdown(info_pill([
+        ("☀️",  "Best Day",     f"{best_day_str}  ·  {best_day_v:.1f} kWh", "#34D399"),
         ("🌡️", "Temp Range",   f"{temp_min:.0f}–{temp_max:.0f}°C", "#F87171"),
         ("☁️",  "Avg Cloud",    f"{cloud_avg:.0f}%",                 "#94A3B8"),
         ("💧",  "Avg Humidity", f"{hum_avg:.0f}%",                   "#60A5FA"),
-        ("☀️",  "Best Day",     f"{best_day_str}  ·  {best_day_v:.1f} kWh", "#FBBF24"),
     ]), unsafe_allow_html=True)
 
     # 7 daily weather cards
