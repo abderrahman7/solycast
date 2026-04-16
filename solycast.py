@@ -10,8 +10,8 @@ from datetime import datetime
 st.set_page_config(page_title="SolyCast", layout="wide", page_icon="☀️")
 
 # ── Session state ──
-if 'lat' not in st.session_state: st.session_state.lat = 51.5074
-if 'lon' not in st.session_state: st.session_state.lon = -0.1278
+if 'lat' not in st.session_state: st.session_state.lat = 35.704647
+if 'lon' not in st.session_state: st.session_state.lon = 0.582941
 
 
 # ============================================================
