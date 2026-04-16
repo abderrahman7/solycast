@@ -10,8 +10,8 @@ from datetime import datetime
 st.set_page_config(page_title="SolyCast", layout="wide", page_icon="☀️")
 
 # ── Session state ──
-if 'lat' not in st.session_state: st.session_state.lat = 51.5074
-if 'lon' not in st.session_state: st.session_state.lon = -0.1278
+if 'lat' not in st.session_state: st.session_state.lat = 35.704647
+if 'lon' not in st.session_state: st.session_state.lon = 0.582941
 
 
 # ============================================================
@@ -353,6 +353,82 @@ def fetch_solycast_data(lat, lon, tilt, azimuth, capacity):
 
 
 # ============================================================
+# DATA CLEANING
+# ============================================================
+
+def clean_data(df, capacity):
+    """
+    Multi-step cleaning pipeline applied to the raw hourly DataFrame.
+    The cleaned result is the single source of truth for every chart,
+    metric and table — including the clear-sky ceiling.
+    """
+    df = df.copy()
+
+    # 1. Remove duplicate timestamps (keep first)
+    df = df.drop_duplicates(subset='Time')
+
+    # 2. Sort chronologically and reset index
+    df = df.sort_values('Time').reset_index(drop=True)
+
+    # 3. Clip each column to its physical range
+    df['Predicted_kW'] = df['Predicted_kW'].clip(lower=0.0)
+    df['ClearSky_kW']  = df['ClearSky_kW'].clip(lower=0.0, upper=0.9 * capacity)
+    df['Temp_C']       = df['Temp_C'].clip(lower=-60.0, upper=60.0)
+    df['Cloud_Pct']    = df['Cloud_Pct'].clip(lower=0.0, upper=100.0)
+    df['Humidity']     = df['Humidity'].clip(lower=0.0, upper=100.0)
+
+    # 4. Forward-fill NaN values, then zero-fill any remaining
+    df = df.ffill().fillna(0)
+
+    # 5. Enforce the clear-sky ceiling:
+    #    Predicted_kW can never exceed the physics-based clear-sky ceiling.
+    #    This propagates automatically to every stat, chart and metric below.
+    df['Predicted_kW'] = df[['Predicted_kW', 'ClearSky_kW']].min(axis=1)
+
+    # 6. Re-derive Date after sort
+    df['Date'] = df['Time'].dt.date
+
+    return df
+
+
+# ============================================================
+# FEATURE ENGINEERING
+# ============================================================
+
+def engineer_features(df):
+    """
+    Derives temporal, atmospheric and power features from the cleaned DataFrame.
+    All engineered columns appear in the Raw Data tab.
+    """
+    df = df.copy()
+
+    # ── Temporal ──────────────────────────────────────────────────────────────
+    df['Hour']        = df['Time'].dt.hour
+    df['DayOfWeek']   = df['Time'].dt.dayofweek          # 0=Mon … 6=Sun
+    _day0             = df['Time'].dt.date.min()
+    df['DayNumber']   = df['Time'].dt.date.apply(
+                            lambda d: (d - _day0).days + 1)
+    df['Is_Daylight'] = (df['ClearSky_kW'] > 0).astype(int)
+
+    # ── Atmospheric ───────────────────────────────────────────────────────────
+    # Cloud attenuation factor (1 = perfectly clear, 0 = fully overcast)
+    df['Cloud_Atten'] = (1.0 - df['Cloud_Pct'] / 100.0).round(4)
+
+    # ── Power performance ─────────────────────────────────────────────────────
+    # Clear-sky utilisation ratio (0 = no sun captured, 1 = perfect)
+    _cs_safe          = df['ClearSky_kW'].replace(0, float('nan'))
+    df['CS_Util']     = (df['Predicted_kW'] / _cs_safe).fillna(0.0).clip(0.0, 1.0).round(4)
+
+    # 3-hour centred rolling mean (smooths short cloud transients)
+    df['Roll3h_kW']   = df['Predicted_kW'].rolling(3, center=True, min_periods=1).mean().round(4)
+
+    # Intra-day cumulative generation (kWh, 1 h per row)
+    df['Cum_kWh_Day'] = df.groupby(df['Time'].dt.date)['Predicted_kW'].cumsum().round(4)
+
+    return df
+
+
+# ============================================================
 # CHART LAYOUT — transparent backgrounds, neutral grids,
 # legend always on the right. Works on both Streamlit themes.
 # ============================================================
@@ -502,6 +578,10 @@ with col_map:
 data = fetch_solycast_data(st.session_state.lat, st.session_state.lon, tilt, azimuth, capacity)
 if data.empty:
     st.stop()
+
+# ── Clean then engineer ──
+data = clean_data(data, capacity)
+data = engineer_features(data)
 
 with col_metrics:
     available_dates = data['Date'].unique()
@@ -761,14 +841,29 @@ with t3:
 
 # ── Tab 4: Raw Data ──
 with t4:
+    # Column order matches the notebook's engineered DataFrame exactly
+    raw_cols = [
+        'Time', 'Predicted_kW', 'ClearSky_kW', 'Temp_C', 'Cloud_Pct', 'Humidity',
+        'Hour', 'DayNumber', 'Is_Daylight',
+        'Cloud_Atten', 'CS_Util', 'Roll3h_kW', 'Cum_kWh_Day',
+    ]
+    raw_fmt = {
+        'Predicted_kW': '{:.3f}',
+        'ClearSky_kW':  '{:.3f}',
+        'Temp_C':       '{:.1f}',
+        'Cloud_Pct':    '{:.0f}',
+        'Humidity':     '{:.0f}',
+        'Cloud_Atten':  '{:.4f}',
+        'CS_Util':      '{:.4f}',
+        'Roll3h_kW':    '{:.4f}',
+        'Cum_kWh_Day':  '{:.4f}',
+    }
     st.markdown(f"""
     <div style="font-size:0.76rem;opacity:0.4;color:var(--text-color);margin-bottom:0.5rem;">
-      Hourly forecast data — all times UTC · {len(data)} rows
+      Hourly forecast data — all times UTC · {len(data)} rows ·
+      cleaned &amp; feature-engineered
     </div>""", unsafe_allow_html=True)
     st.dataframe(
-        data.style.format({
-            'Predicted_kW': '{:.3f}', 'ClearSky_kW': '{:.3f}',
-            'Temp_C': '{:.1f}', 'Cloud_Pct': '{:.0f}', 'Humidity': '{:.0f}',
-        }),
+        data[raw_cols].style.format(raw_fmt),
         use_container_width=True, height=420,
     )
