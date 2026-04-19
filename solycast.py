@@ -685,6 +685,75 @@ with t1:
     fig.update_layout(**chart_layout("7-Day Energy Output Forecast", "Output (kW)"))
     st.plotly_chart(fig, use_container_width=True)
 
+    # ── Daily summary table ──────────────────────────────────────────────────
+    _daily_tbl = data.groupby("Date").agg(
+        MinTemp  = ("Temp_C",       "min"),
+        MaxTemp  = ("Temp_C",       "max"),
+        AvgCloud = ("Cloud_Pct",    "mean"),
+        AvgHum   = ("Humidity",     "mean"),
+        GenKWh   = ("Predicted_kW", "sum"),
+    ).reset_index()
+
+    def _cond(c):
+        if c < 20:  return "☀️ Clear"
+        if c < 70:  return "⛅ Partly Cloudy"
+        return              "☁️ Overcast"
+
+    # Build HTML table rows
+    _rows = ""
+    for _, r in _daily_tbl.iterrows():
+        _date  = r["Date"].strftime("%Y-%m-%d") if hasattr(r["Date"], "strftime") else str(r["Date"])
+        _cond_str = _cond(r["AvgCloud"])
+        _rows += (
+            f'<tr>'
+            f'<td>{_date}</td>'
+            f'<td>{_cond_str}</td>'
+            f'<td>{r["MinTemp"]:.1f}</td>'
+            f'<td>{r["MaxTemp"]:.1f}</td>'
+            f'<td>{r["AvgCloud"]:.1f}</td>'
+            f'<td>{r["AvgHum"]:.1f}</td>'
+            f'<td>{r["GenKWh"]:.2f}</td>'
+            f'</tr>'
+        )
+
+    st.markdown(f"""
+    <style>
+    .sc-forecast-tbl {{ width:100%; border-collapse:collapse;
+        font-family:"DM Sans",sans-serif; font-size:0.875rem; }}
+    .sc-forecast-tbl thead tr {{
+        background:rgba(245,158,11,0.10);
+        border-bottom:1px solid rgba(245,158,11,0.30); }}
+    .sc-forecast-tbl th {{
+        padding:10px 14px; text-align:left;
+        font-family:"Syne",sans-serif; font-size:0.72rem;
+        font-weight:700; letter-spacing:0.10em;
+        text-transform:uppercase; color:#F59E0B;
+        white-space:nowrap; }}
+    .sc-forecast-tbl td {{
+        padding:11px 14px;
+        color:var(--text-color);
+        border-bottom:1px solid rgba(128,128,128,0.09); }}
+    .sc-forecast-tbl tbody tr:hover {{
+        background:rgba(245,158,11,0.05); }}
+    .sc-forecast-tbl tbody tr:last-child td {{ border-bottom:none; }}
+    </style>
+    <div style="background:var(--secondary-background-color);
+                border:1px solid rgba(128,128,128,0.14);
+                border-radius:14px; overflow:hidden;
+                box-shadow:0 2px 16px rgba(0,0,0,0.09);
+                margin-top:0.6rem;">
+      <table class="sc-forecast-tbl">
+        <thead><tr>
+          <th>Date</th><th>Condition</th>
+          <th>Min °C</th><th>Max °C</th>
+          <th>Cloud %</th><th>Humidity %</th>
+          <th>Generation (kWh)</th>
+        </tr></thead>
+        <tbody>{_rows}</tbody>
+      </table>
+    </div>
+    """, unsafe_allow_html=True)
+
 
 # ── Tab 2: Weather Trends ──
 with t2:
