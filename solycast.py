@@ -312,7 +312,7 @@ def compute_annual_yield(lat, lon, tilt, azimuth, capacity):
 # API DATA FETCH — auto-calibrated clear sky ceiling
 # ============================================================
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=300)
 def fetch_solycast_data(lat, lon, tilt, azimuth, capacity):
     api_az = azimuth - 180
     url = (f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
